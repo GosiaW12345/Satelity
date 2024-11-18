@@ -2,6 +2,7 @@ import requests
 import ephem
 import time
 
+# Nazwy zmiennych są po polsku.
 class satelity:
     def __init__(self, adres):
         self.adres = adres
