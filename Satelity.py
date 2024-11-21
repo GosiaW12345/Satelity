@@ -1,8 +1,9 @@
 import requests
+import plotly.graph_objects as go
 import ephem
 import time
 
-# Nazwy zmiennych są po polsku.
+
 class satelity:
     def __init__(self, adres):
         self.adres = adres
@@ -30,12 +31,35 @@ class satelity:
         for self.i in range(len(self.sat_list)):
             print(f"{self.i}: {self.sat_list[self.i]['nazwa']}")
 
+
+
+def mapa_swiata():
+    fig = go.Figure(data=go.Scattergeo())
+
+    fig.update_geos(projection_type="orthographic",
+        showland=True,
+        landcolor="lightgreen",
+        showocean=True,
+        oceancolor="lightblue")
+
+    fig.show()
+
+
 #==========================================
 
-AmSat = satelity('http://www.amsat.org/tle/dailytle.txt')
-AmSat.pobierz_dane()
-AmSat.satelity_lista()
-AmSat.wypisz()
 
+print("\nDostępne kalsy satelitów:\n  1) Satelity Amatorskie\n  2) Satelity NOAA\n")
+n = input('Podaj klasę satelitów (numer), lub podaj adres do pliku z danymi TLE: ')
 
+if n == '1':
+    S = satelity('http://www.amsat.org/tle/dailytle.txt')
+elif n == '2':
+    S = satelity('http://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle')
+
+S.pobierz_dane(),
+S.satelity_lista(),
+print("lista satelitów amatorskich:"),
+S.wypisz()
+
+mapa_swiata()
 
