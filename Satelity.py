@@ -1,7 +1,10 @@
+from time import strftime
+from typing import List, Tuple, Any
+
 import requests
 import plotly.graph_objects as go
 import ephem
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class satellites:
@@ -36,35 +39,45 @@ class satellites:
 
 
 
-def world_map(LAT, LON):
+def world_map(LAT, LON, set_lat, set_lon, nazwa, set_time, rise_time):
     fig = go.Figure(go.Scattergeo())
 
+    fig.update_layout(title=f"Satelita: {nazwa} {set_time} - {rise_time}")
+
     fig.update_geos(
-        #projection_type="orthographic",
+        projection_type="orthographic",
         showland=True,
         landcolor="lightgreen",
         showocean=True,
         oceancolor="lightblue")
 
     fig.add_trace(go.Scattergeo(
-        lon = [18.8667],
+        name = "twoja lokalizacja",
         lat = [50.45],
+        lon = [18.8667],
         mode = 'markers',
-        marker = dict(symbol='x', size=3, color='black') ))
+        marker = dict(symbol='x', size=5, color='black') ))
 
     fig.add_trace(go.Scattergeo(
-        lon=LON,
-        lat=LAT,
-        mode='lines',
-        line = dict(color='red', width=2)))
+        name = "punkt zniknięcia satelity z horyzontu",
+        lat = [set_lat],
+        lon = [set_lon],
+        mode = 'markers',
+        marker = dict(symbol='star-diamond-dot', size=7, color='red')))
 
+    fig.add_trace(go.Scattergeo(
+        name = "trajektoria",
+        lat = LAT,
+        lon = LON,
+        mode = 'lines',
+        line = dict(color='red', width=2)))
 
     fig.show()
 
-def predykcja(Sat):
-    #Tworzymy obiekt typu ephem.Observer i efiniujemy jego:
-    # wspułrzędne geograficzne, wysokość nad poziomem morza
 
+def prediction(Sat):
+    #Tworzymy obiekt typu ephem.Observer i definiujemy jego:
+    # wspułrzędne geograficzne, wysokość nad poziomem morza
     o = ephem.Observer()
     o.lat = "50.45"
     o.lon = "18.8667"
@@ -78,9 +91,11 @@ def predykcja(Sat):
         time = start_time + timedelta(minutes = n*8)
         o.date = ephem.date(time)
         Sat.compute(o)
-        if (Sat.alt / ephem.degree) > 0:
+        if (Sat.alt) > 0:
             reference_point = (Sat.sublat/ephem.degree, Sat.sublong/ephem.degree, time)
             break
+        else:
+            return [0, 0, 0, 0, 0, 0]
 
     visible_points_lat = []
     visible_points_lon = []
@@ -88,61 +103,37 @@ def predykcja(Sat):
     visible_points_lat.append(reference_point[0])
     visible_points_lon.append(reference_point[1])
 
+
     start_time = reference_point[2]
 
-    for n in range(10):
-        time_up = start_time + timedelta(minutes=n+1)
-        time_down = start_time - timedelta(minutes=n+1)
+    satelite_rise_time = None
+    satelite_set_time = None
+    satelite_set_lat = None
+    satelite_set_lon = None
+
+    for n in range(20):
+        time_up = start_time + timedelta(minutes=0.5*(n+1))
+        time_down = start_time - timedelta(minutes=0.5*(n+1))
 
         o.date = ephem.date(time_up)
         Sat.compute(o)
-        if (Sat.alt / ephem.degree) > 0:
+        if (Sat.alt) > 0:
             visible_points_lat.append(Sat.sublat / ephem.degree)
             visible_points_lon.append(Sat.sublong / ephem.degree)
-            satelite_rise_point = (Sat.sublat / ephem.degree, Sat.sublong / ephem.degree, time_up)
+            satelite_set_time = time_up
+            satelite_set_lat = Sat.sublat / ephem.degree
+            satelite_set_lon = Sat.sublong / ephem.degree
 
         o.date = ephem.date(time_down)
-        if (Sat.alt / ephem.degree) > 0:
+        Sat.compute(o)
+        if (Sat.alt) > 0:
             visible_points_lat.append(Sat.sublat / ephem.degree)
             visible_points_lon.append(Sat.sublong / ephem.degree)
-            satelite_set_point = (Sat.sublat / ephem.degree, Sat.sublong / ephem.degree, time_down)
+            satelite_rise_time = time_down
 
-    return [visible_points_lat, visible_points_lon, satelite_rise_point[2], satelite_set_point[2]]
-"""
-def current_trajectory(Sat):
-    #Tworzymy obiekt typu ephem.Observer i efiniujemy jego:
-    # wspułrzędne geograficzne, wysokość nad poziomem morza
+    return [visible_points_lat, visible_points_lon, satelite_rise_time, satelite_set_time, satelite_set_lat, satelite_set_lon]
 
-    o = ephem.Observer()
-    o.lat = "50.45"
-    o.lon = "18.8667"
-    o.elevation = 274
 
-    start_time = datetime.now()
-
-    visible_points_lat = []
-    visible_points_lon = []
-
-    # na obiekcie S typu ephem.satelte wywoujemy metodę compute, której parametrem jest wyżej zdefiniowany ephem.Observer
-    # metoda compute oblicza m.in. wysokość satelity nad hotyzontem obserwatora w zadanym czasie
-    for n in range(30):
-        time = start_time + timedelta(minutes = n)
-        o.date = ephem.date(time)
-        Sat.compute(o)
-        visible_points_lat.append(Sat.sublat / ephem.degree)
-        visible_points_lon.append(Sat.sublong / ephem.degree)
-    return [visible_points_lat, visible_points_lon]
-"""
-"""
-======================================================================================================
-======================================================================================================
-"""
-"""
-sat_group = satellites('http://www.amsat.org/tle/dailytle.txt')
-n=11
-sat_group.download_TLE()
-sat_group.list()
-"""
 
 print("\nDostępne grupy satelitów:\n  1) Satelity Amatorskie\n  2) Satelity NOAA\n")
 n = input('Podaj grupę satelitów (numer), lub podaj adres do pliku z danymi TLE: ')
@@ -160,30 +151,45 @@ sat_group.list()
 print("Satelity znajdujące się w wybranej grupie:")
 sat_group.print_satellite_names()
 
-n = int(input("Wybierz numer interesującego Cię satelity: "))
+N = input("Wybierz numery interesujących Cię satelitów (numery odziel przecinkiem)\nwybierz x aby zaznaczyć wszystkie: ")
+
+if N == 'x':
+    longest_visible: list[tuple[Any, Any, datetime, datetime, Any, Any, int]] = []
+    for i in range(len(sat_group.sat_list)):
+        traced_sat = ephem.readtle(sat_group.sat_list[i]['nazwa'], sat_group.sat_list[i]['dane1'],
+                                   sat_group.sat_list[i]['dane2'])
+
+        LAT, LON, Rise_time, Set_time, set_lat, set_lon = prediction(traced_sat)
+        if Rise_time != 0:
+            if len(longest_visible) == 5:
+                for k in longest_visible:
+                    if k[3] - k[2] < Set_time - Rise_time:
+                        longest_visible.remove(k)
+                        longest_visible.append((LAT, LON, Rise_time, Set_time, set_lat, set_lon, i))
+            else:
+                longest_visible.append((LAT, LON, Rise_time, Set_time, set_lat, set_lon, i))
+    for sat in longest_visible:
+        Rise_time = sat[2].strftime('%Y-%m-%d %H:%M')
+        Set_time = sat[3].strftime('%Y-%m-%d %H:%M')
+        print(f"{sat_group.sat_list[sat[6]]['nazwa']}: {Rise_time} - {Set_time}")
+        world_map(sat[0], sat[1], sat[4], sat[5], sat_group.sat_list[i]['nazwa'], Set_time, Rise_time)
 
 
-#na podstawie nazwy satelity oraz dwuwiersza TLE, tworzymy obiekt typu "ephem.EarthSatelite"
-traced_sat = ephem.readtle(sat_group.sat_list[n]['nazwa'], sat_group.sat_list[n]['dane1'], sat_group.sat_list[n]['dane2'])
 
-#traced_sat.compute()
-#world_map(lat = 50.45, lon = 18.8667)
 
-LAT, LON, rise_time, set_time = predykcja(traced_sat)
-print("Satelita będzie widoczny: ", rise_time)
-print("Satelita będzie zniknie z horyzontu: ", set_time)
-world_map(LAT, LON)
+else:
+    N = N.split(",")
+    print("\nWśród wybranych satelitów widzoczne będą:")
+    for i in N:
+        i = int(i)
+        #na podstawie nazwy satelity oraz dwuwiersza TLE, tworzymy obiekt typu "ephem.EarthSatelite"
+        traced_sat = ephem.readtle(sat_group.sat_list[i]['nazwa'], sat_group.sat_list[i]['dane1'], sat_group.sat_list[i]['dane2'])
 
-#sat.compute(o)
-#mapa_swiata(k)
+        LAT, LON, Rise_time, Set_time, set_lat, set_lon = prediction(traced_sat)
 
-"""
-o = ephem.Observer()
-o.lat = "50.45"
-o.lon = "18.8667"
-o.elevation = 274
-o.date = '2024/12/15 13:36:56'
-traced_sat.compute(o)
-print(traced_sat.alt / ephem.degree)
+        if Rise_time != 0:
+            Rise_time = Rise_time.strftime('%Y-%m-%d %H:%M')
+            Set_time = Set_time.strftime('%Y-%m-%d %H:%M')
+            print(f"{sat_group.sat_list[i]['nazwa']}: {Rise_time} - {Set_time}")
+            world_map(LAT, LON, set_lat, set_lon, sat_group.sat_list[i]['nazwa'], Set_time, Rise_time)
 
-"""
